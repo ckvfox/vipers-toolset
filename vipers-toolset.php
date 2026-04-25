@@ -5,7 +5,8 @@
  * Description: Asset Governance Toolkit with scanner, conditional rules, safety net, performance compare, and recommendations.
  * Version: 2.0.1
  * Author: Vipers
- * License: GPL-2.0+
+ * License: GPL-2.0-or-later
+ * License URI: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
  * Text Domain: vipers-toolset
  */
 
