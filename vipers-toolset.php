@@ -19,6 +19,7 @@ class Vipers_Toolset_2 {
 	const OPTION_COMPARE_LOG = 'vipers_toolset2_compare_log';
 	const OPTION_SNAPSHOTS = 'vipers_toolset2_snapshots';
 	const OPTION_EVENTS = 'vipers_toolset2_events';
+	const TRANSIENT_SCAN_TOKEN = 'vipers_toolset2_scan_token';
 
 	private static $instance = null;
 	private $decision_log = array();
@@ -241,7 +242,7 @@ class Vipers_Toolset_2 {
 		}
 
 		$settings = $this->get_settings();
-		if ( empty( $settings['scanner_enabled'] ) ) {
+		if ( ! $this->is_capture_request_allowed( $settings ) ) {
 			return;
 		}
 
@@ -299,6 +300,26 @@ class Vipers_Toolset_2 {
 		);
 		$compare_log = array_slice( $compare_log, -absint( $settings['max_log_rows'] ) );
 		update_option( self::OPTION_COMPARE_LOG, $compare_log, false );
+	}
+
+	private function is_capture_request_allowed( $settings ) {
+		if ( empty( $settings['scanner_enabled'] ) ) {
+			return false;
+		}
+
+		$request_token = isset( $_GET['vipers_toolset_scan'] )
+			? sanitize_text_field( wp_unslash( $_GET['vipers_toolset_scan'] ) )
+			: '';
+		if ( empty( $request_token ) ) {
+			return false;
+		}
+
+		$active_token = get_transient( self::TRANSIENT_SCAN_TOKEN );
+		if ( ! is_string( $active_token ) || '' === $active_token ) {
+			return false;
+		}
+
+		return hash_equals( $active_token, $request_token );
 	}
 
 	private function build_row( $type, $handle, $src, $size ) {
@@ -696,10 +717,15 @@ class Vipers_Toolset_2 {
 
 		$targets = array_unique( $targets );
 		$results = array();
+		$scan_token = wp_generate_password( 24, false, false );
+		set_transient( self::TRANSIENT_SCAN_TOKEN, $scan_token, 10 * MINUTE_IN_SECONDS );
+
 		foreach ( $targets as $url ) {
-			wp_remote_get( $url, array( 'timeout' => 10, 'redirection' => 3 ) );
-			$results[] = $url;
+			$scan_url = add_query_arg( 'vipers_toolset_scan', rawurlencode( $scan_token ), $url );
+			wp_remote_get( $scan_url, array( 'timeout' => 10, 'redirection' => 3 ) );
+			$results[] = $scan_url;
 		}
+		delete_transient( self::TRANSIENT_SCAN_TOKEN );
 
 		$this->add_event( 'Manual scan requested for ' . count( $results ) . ' URLs.', 'success' );
 		wp_send_json_success( array( 'count' => count( $results ) ) );
